@@ -1,24 +1,36 @@
 const TheoDoiMuonSach = require('../models/theodoimuonsach');
-
+const Sach = require('../models/sach');
 // Lấy tất cả yêu cầu mượn sách (cho admin)
-const getAllBorrowRequests = async (req, res) => {
-  try {
-    const requests = await TheoDoiMuonSach.find()
-      .populate({
-        path: 'maDocGia',
-        select: 'maDocGia hoLot ten -_id'
-      })
-      .populate({
-        path: 'maSach',
-        select: 'maSach tenSach -_id'
-      })
-      .sort({ createdAt: -1 });
+// const getAllBorrowRequests = async (req, res) => {
+//   try {
+//     const requests = await TheoDoiMuonSach.find()
+//       .populate({
+//         path: 'maDocGia',
+//         select: 'maDocGia hoLot ten -_id'
+//       })
+//       .populate({
+//         path: 'maSach',
+//         select: 'maSach tenSach -_id'
+//       })
+//       .sort({ createdAt: -1 });
 
-    res.json(requests);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
+//     res.json(requests);
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+  const getAllBorrowRequests = async (req, res) => {
+    try {
+      const requests = await TheoDoiMuonSach.find()
+        .populate('maDocGia') // Populate toàn bộ thông tin độc giả
+        .populate('maSach')   // Populate toàn bộ thông tin sách
+        .sort({ createdAt: -1 });
+
+      res.json(requests);
+    } catch (error) {
+      res.status(500).json({ message: error.message });
+    }
+  };
 
 // Lấy lịch sử mượn sách của một độc giả
 const getReaderBorrowHistory = async (req, res) => {
@@ -49,7 +61,6 @@ const createBorrowRequest = async (req, res) => {
   }
 };
 
-// Duyệt yêu cầu mượn sách (chấp nhận/từ chối)
 const updateBorrowRequest = async (req, res) => {
   try {
     const { trangThai } = req.body;
@@ -61,27 +72,41 @@ const updateBorrowRequest = async (req, res) => {
       return res.status(404).json({ message: 'Không tìm thấy yêu cầu mượn sách' });
     }
 
+    const book = await Sach.findById(request.maSach._id);
+    if (!book) {
+      return res.status(404).json({ message: 'Không tìm thấy sách' });
+    }
+
+    // Kiểm tra và cập nhật số lượng sách
+    if (trangThai === 'Đã duyệt') {
+      if (book.soQuyen <= 0) {
+        return res.status(400).json({ message: 'Sách đã hết, không thể cho mượn' });
+      }
+      book.soQuyen -= 1;
+    } 
+    else if (trangThai === 'Đã trả' && request.trangThai === 'Đã duyệt') {
+      book.soQuyen += 1;
+    }
+
+    await book.save();
     request.trangThai = trangThai;
     if (trangThai === 'Đã trả') {
       request.ngayTra = new Date();
     }
 
     await request.save();
-
-    // Tạo thông báo cho độc giả
-    const notification = new Notification({
-      userId: request.maDocGia._id,
-      type: trangThai === 'Đã duyệt' ? 'BORROW_REQUEST_APPROVED' : 'BORROW_REQUEST_REJECTED',
-      message: `Yêu cầu mượn sách "${request.maSach.tenSach}" đã ${trangThai.toLowerCase()}`,
-      data: {
-        bookId: request.maSach._id,
-        bookTitle: request.maSach.tenSach,
-        status: trangThai
+    
+    // Trả về cả thông tin sách đã cập nhật
+    const response = {
+      ...request.toObject(),
+      maSach: {
+        ...request.maSach.toObject(),
+        soQuyen: book.soQuyen
       }
-    });
-    await notification.save();
+    };
 
-    res.json(request);
+    return res.json(response);
+
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
