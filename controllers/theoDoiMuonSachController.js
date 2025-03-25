@@ -1,29 +1,11 @@
 const TheoDoiMuonSach = require('../models/theodoimuonsach');
 const Sach = require('../models/sach');
-// Lấy tất cả yêu cầu mượn sách (cho admin)
-// const getAllBorrowRequests = async (req, res) => {
-//   try {
-//     const requests = await TheoDoiMuonSach.find()
-//       .populate({
-//         path: 'maDocGia',
-//         select: 'maDocGia hoLot ten -_id'
-//       })
-//       .populate({
-//         path: 'maSach',
-//         select: 'maSach tenSach -_id'
-//       })
-//       .sort({ createdAt: -1 });
 
-//     res.json(requests);
-//   } catch (error) {
-//     res.status(500).json({ message: error.message });
-//   }
-// };
   const getAllBorrowRequests = async (req, res) => {
     try {
       const requests = await TheoDoiMuonSach.find()
-        .populate('maDocGia') // Populate toàn bộ thông tin độc giả
-        .populate('maSach')   // Populate toàn bộ thông tin sách
+        .populate('maDocGia')
+        .populate('maSach') 
         .sort({ createdAt: -1 });
 
       res.json(requests);
@@ -36,7 +18,10 @@ const Sach = require('../models/sach');
 const getReaderBorrowHistory = async (req, res) => {
   try {
     const history = await TheoDoiMuonSach.find({ maDocGia: req.user._id })
-      .populate('maSach')
+      .populate({
+        path: 'maSach',
+        select: 'maSach tenSach soQuyen'
+      })
       .sort({ createdAt: -1 });
     res.json(history);
   } catch (error) {
