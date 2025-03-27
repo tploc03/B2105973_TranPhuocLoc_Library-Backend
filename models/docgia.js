@@ -31,7 +31,6 @@ const docGiaSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  // Thêm trường cho authentication
   email: {
     type: String,
     required: true,
